@@ -61,9 +61,10 @@ function findChromePath() {
   for (const p of commonPaths) {
     if (existsSync(p)) return p;
   }
-  // 3. Try puppeteer's own cache
+  // 3. Try puppeteer's cache inside the project (.puppeteerrc.cjs config)
+  const projectCache = resolve(__dirname, '..', '.cache', 'puppeteer');
   try {
-    const result = execSync('find /opt/render/.cache/puppeteer -name chrome -type f 2>/dev/null || true', { encoding: 'utf8' }).trim();
+    const result = execSync(`find "${projectCache}" -name chrome -type f 2>/dev/null || find /opt/render/.cache/puppeteer -name chrome -type f 2>/dev/null || true`, { encoding: 'utf8' }).trim();
     if (result) return result.split('\n')[0];
   } catch { /* ignore */ }
   // 4. Return undefined — puppeteer will use its default

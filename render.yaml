@@ -3,7 +3,7 @@ services:
     name: expenses-api
     runtime: node
     nodeVersion: "20.18.0"
-    buildCommand: npm install && cd local-scrapers && npm install && npx puppeteer browsers install chrome && cd ..
+    buildCommand: npm install && cd local-scrapers && npm install && cd .. && npx puppeteer browsers install chrome
     startCommand: node server/index.js
     envVars:
       - key: NODE_ENV
