@@ -2,6 +2,7 @@ services:
   - type: web
     name: expenses-api
     runtime: node
+    nodeVersion: "20.18.0"
     buildCommand: npm install && cd local-scrapers && npm install && cd ..
     startCommand: node server/index.js
     envVars:
@@ -11,6 +12,10 @@ services:
         value: Asia/Jerusalem
       - key: SERVER_PORT
         value: "3001"
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      - key: PUPPETEER_SKIP_DOWNLOAD
+        value: "true"
       - key: ISRACARD_ID
         sync: false
       - key: ISRACARD_CARD6
