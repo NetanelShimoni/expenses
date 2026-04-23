@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
+import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, '..', '.env') });
@@ -44,6 +45,38 @@ function classifyCategory(description) {
   return 'אחר';
 }
 
+// ---- Detect Chrome path for Puppeteer ----
+function findChromePath() {
+  // 1. Check PUPPETEER_EXECUTABLE_PATH env var
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  // 2. Try common Render/Linux paths
+  const commonPaths = [
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ];
+  for (const p of commonPaths) {
+    if (existsSync(p)) return p;
+  }
+  // 3. Try puppeteer's own cache
+  try {
+    const result = execSync('find /opt/render/.cache/puppeteer -name chrome -type f 2>/dev/null || true', { encoding: 'utf8' }).trim();
+    if (result) return result.split('\n')[0];
+  } catch { /* ignore */ }
+  // 4. Return undefined — puppeteer will use its default
+  return undefined;
+}
+
+const CHROME_PATH = findChromePath();
+if (CHROME_PATH) {
+  console.log(`[Chrome] Found at: ${CHROME_PATH}`);
+} else {
+  console.log('[Chrome] No custom path found, using puppeteer default');
+}
+
 // ---- Scraper functions ----
 
 async function scrapeIsracard(startDate) {
@@ -57,6 +90,7 @@ async function scrapeIsracard(startDate) {
     showBrowser: false,
     timeout: 120000,
     defaultTimeout: 120000,
+    ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
   };
 
   const credentials = {
@@ -93,6 +127,7 @@ async function scrapeCal(startDate) {
     showBrowser: false,
     timeout: 120000,
     defaultTimeout: 120000,
+    ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
   };
 
   const credentials = {
