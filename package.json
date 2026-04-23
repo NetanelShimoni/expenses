@@ -1,0 +1,23 @@
+{
+  "name": "bank",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "server": "node server/index.js",
+    "client": "cd finance-dashboard && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.1",
+    "express": "^5.1.0",
+    "israeli-bank-scrapers": "file:local-scrapers"
+  }
+}

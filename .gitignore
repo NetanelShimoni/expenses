@@ -1,0 +1,10 @@
+.env
+.env.*
+node_modules
+finance-dashboard/dist
+local-scrapers/lib
+test_cal.js
+test.js
+*.log
+debug.log
+server/debug.log
