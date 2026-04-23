@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Header from '@/components/Header';
@@ -5,6 +6,8 @@ import BottomNav from '@/components/BottomNav';
 import DashboardPage from '@/pages/DashboardPage';
 import TransactionsPage from '@/pages/TransactionsPage';
 import InsightsPage from '@/pages/InsightsPage';
+import LoginPage from '@/pages/LoginPage';
+import { isAuthenticated } from '@/services/api';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +18,12 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  const [authed, setAuthed] = useState(isAuthenticated());
+
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

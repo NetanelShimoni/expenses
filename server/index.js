@@ -6,6 +6,8 @@ import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, '..', '.env') });
@@ -21,6 +23,55 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.SERVER_PORT || 3001;
+
+// ---- Auth config ----
+const JWT_SECRET = process.env.JWT_SECRET;
+const PASSWORD_HASH = process.env.PASSWORD_HASH;
+
+if (!JWT_SECRET || !PASSWORD_HASH) {
+  console.warn('[Auth] WARNING: JWT_SECRET or PASSWORD_HASH not set. Auth will reject all requests.');
+}
+
+// Auth middleware — checks Bearer token
+function authMiddleware(req, res, next) {
+  // Allow login and ping/health without auth
+  if (req.path === '/api/login' || req.path === '/api/ping' || req.path === '/api/health') {
+    return next();
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'לא מחובר. נדרשת הזדהות.' });
+  }
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'טוקן לא תקין או פג תוקף.' });
+  }
+}
+
+app.use(authMiddleware);
+
+// ---- Login endpoint ----
+app.post('/api/login', async (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: 'חסרה סיסמה.' });
+  }
+  try {
+    const match = await bcrypt.compare(password, PASSWORD_HASH);
+    if (!match) {
+      return res.status(401).json({ error: 'סיסמה שגויה.' });
+    }
+    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token });
+  } catch (err) {
+    console.error('[Auth] Login error:', err);
+    res.status(500).json({ error: 'שגיאת שרת.' });
+  }
+});
 
 // ---- Category classification ----
 const CATEGORY_KEYWORDS = {
