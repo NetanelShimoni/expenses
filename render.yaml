@@ -3,7 +3,7 @@ services:
     name: expenses-api
     runtime: node
     nodeVersion: "20.18.0"
-    buildCommand: npm install && cd local-scrapers && npm install && cd ..
+    buildCommand: npm install && cd local-scrapers && npm install && npx puppeteer browsers install chrome && cd ..
     startCommand: node server/index.js
     envVars:
       - key: NODE_ENV
@@ -12,10 +12,6 @@ services:
         value: Asia/Jerusalem
       - key: SERVER_PORT
         value: "3001"
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "true"
-      - key: PUPPETEER_SKIP_DOWNLOAD
-        value: "true"
       - key: ISRACARD_ID
         sync: false
       - key: ISRACARD_CARD6
