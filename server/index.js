@@ -290,16 +290,19 @@ function setCache(card, month, data) {
  * Each scrape takes ~6+ seconds, so parallel execution saves significant time.
  */
 app.get('/api/transactions', async (req, res) => {
-  const { month, card = 'all', forceRefresh } = req.query;
+  const { month, card = 'all', forceRefresh, refreshCard } = req.query;
 
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {
     return res.status(400).json({ error: 'Invalid month format. Use YYYY-MM.' });
   }
 
-  // If forceRefresh requested, invalidate cache first
+  // If forceRefresh requested, invalidate cache first.
+  // If refreshCard is provided (e.g. 'cal' or 'isracard'), only invalidate that one
+  // — keeps the other card's cached data intact so we don't re-scrape it unnecessarily.
   if (forceRefresh === 'true') {
-    invalidateCache(card, month);
-    console.log(`[API] Force refresh requested for ${card} / ${month}`);
+    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard') ? refreshCard : card;
+    invalidateCache(cardToInvalidate, month);
+    console.log(`[API] Force refresh requested for ${cardToInvalidate} / ${month}`);
   }
 
   console.log(`\n[API] GET /api/transactions - month: ${month}, card: ${card}`);

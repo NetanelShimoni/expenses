@@ -8,7 +8,7 @@ const CARD_LABELS: Record<string, string> = {
 interface ScraperErrorBannerProps {
   errors: ScraperError[];
   isRetrying: boolean;
-  onRetry: () => void;
+  onRetry: (card?: string) => void;
 }
 
 export default function ScraperErrorBanner({ errors, isRetrying, onRetry }: ScraperErrorBannerProps) {
@@ -40,7 +40,7 @@ export default function ScraperErrorBanner({ errors, isRetrying, onRetry }: Scra
 
           {/* Retry Button */}
           <button
-            onClick={onRetry}
+            onClick={() => onRetry(err.card)}
             disabled={isRetrying}
             className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
               isRetrying

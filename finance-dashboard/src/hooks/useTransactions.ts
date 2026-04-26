@@ -12,6 +12,7 @@ export function useTransactions(month: string, card = 'all') {
   const [scraperErrors, setScraperErrors] = useState<ScraperError[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const forceRefreshRef = useRef(false);
+  const refreshCardRef = useRef<string | undefined>(undefined);
 
   const query = useQuery<Transaction[]>({
     queryKey: ['transactions', month, card],
@@ -24,8 +25,10 @@ export function useTransactions(month: string, card = 'all') {
         return MOCK_TRANSACTIONS;
       }
       const shouldForce = forceRefreshRef.current;
+      const refreshCard = refreshCardRef.current;
       forceRefreshRef.current = false;
-      const response = await fetchTransactions(month, card, shouldForce);
+      refreshCardRef.current = undefined;
+      const response = await fetchTransactions(month, card, shouldForce, refreshCard);
       setCacheInfo(response.cache);
       setScraperErrors(response.scraperErrors ?? []);
       setIsRefreshing(false);
@@ -35,8 +38,9 @@ export function useTransactions(month: string, card = 'all') {
     retry: 2,
   });
 
-  const forceRefresh = useCallback(() => {
+  const forceRefresh = useCallback((onlyCard?: string) => {
     forceRefreshRef.current = true;
+    refreshCardRef.current = onlyCard;
     setIsRefreshing(true);
     queryClient.invalidateQueries({ queryKey: ['transactions', month, card] });
   }, [queryClient, month, card]);

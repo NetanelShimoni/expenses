@@ -49,9 +49,10 @@ export async function login(password: string): Promise<void> {
   setToken(token);
 }
 
-export async function fetchTransactions(month: string, card = 'all', forceRefresh = false): Promise<TransactionsResponse> {
+export async function fetchTransactions(month: string, card = 'all', forceRefresh = false, refreshCard?: string): Promise<TransactionsResponse> {
   const params = new URLSearchParams({ month, card });
   if (forceRefresh) params.set('forceRefresh', 'true');
+  if (refreshCard) params.set('refreshCard', refreshCard);
 
   const res = await fetch(`${API_BASE}/transactions?${params}`, {
     headers: authHeaders(),
