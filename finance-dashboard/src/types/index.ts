@@ -45,7 +45,13 @@ export interface TransactionsResponse {
 
 export interface ScrapeProgress {
   overall: number;                                  // 0..100 average across active cards
-  cards: Partial<Record<'cal' | 'isracard', { percent: number; phase: string }>>;
+  cards: Partial<Record<'cal' | 'isracard', {
+    percent: number;
+    phase: string;
+    elapsedMs: number;                              // time since the card's first progress event
+    logs: { phase: string; at: number }[];          // chronological phase log (relative ms)
+  }>>;
+  refreshingCard?: 'cal' | 'isracard';              // when set, only this card is being refreshed
 }
 
 // ---- AI Insights ----

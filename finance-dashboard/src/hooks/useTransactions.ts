@@ -22,7 +22,12 @@ export function useTransactions(month: string, card = 'all') {
         setProgress({ overall: 0, cards: {} });
         for (let p = 10; p <= 100; p += 15) {
           await new Promise((r) => setTimeout(r, 80));
-          setProgress({ overall: p, cards: {} });
+          setProgress({
+            overall: p,
+            cards: {
+              cal: { percent: p, phase: 'FETCHING_DATA', elapsedMs: p * 50, logs: [] },
+            },
+          });
         }
         setCacheInfo({ fromCache: false, cachedAt: null });
         setScraperErrors([]);

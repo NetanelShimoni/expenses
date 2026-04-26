@@ -108,15 +108,35 @@ export async function fetchTransactionsStreaming(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const cards: ScrapeProgress['cards'] = {};
+  type CardState = {
+    percent: number;
+    phase: string;
+    startedAt: number;
+    elapsedMs: number;
+    logs: { phase: string; at: number }[];
+  };
+  const cards: Partial<Record<'cal' | 'isracard', CardState>> = {};
+  const refreshingCard = (refreshCard === 'cal' || refreshCard === 'isracard') ? refreshCard : undefined;
   let finalResult: TransactionsResponse | null = null;
   let streamError: string | null = null;
+
+  const toPublicCards = (): ScrapeProgress['cards'] => {
+    const out: ScrapeProgress['cards'] = {};
+    for (const [k, v] of Object.entries(cards) as ['cal' | 'isracard', CardState][]) {
+      out[k] = {
+        percent: v.percent,
+        phase: v.phase,
+        elapsedMs: v.elapsedMs,
+        logs: v.logs,
+      };
+    }
+    return out;
+  };
 
   // SSE parser — accumulate `event:` and `data:` lines until a blank line.
   const parseSSEChunk = (chunk: string) => {
     buffer += chunk;
     let sepIdx;
-    // SSE separator is a blank line; tolerate \r\n
     while ((sepIdx = buffer.search(/\r?\n\r?\n/)) !== -1) {
       const rawEvent = buffer.slice(0, sepIdx);
       buffer = buffer.slice(sepIdx).replace(/^\r?\n\r?\n/, '');
@@ -146,9 +166,28 @@ export async function fetchTransactionsStreaming(
       if (eventName === 'progress') {
         const cardName = payload.card as 'cal' | 'isracard';
         if (cardName === 'cal' || cardName === 'isracard') {
-          cards[cardName] = { percent: payload.cardPercent ?? 0, phase: payload.phase ?? '' };
+          const now = Date.now();
+          const existing = cards[cardName];
+          const startedAt = existing?.startedAt ?? now;
+          const phase = payload.phase ?? '';
+          const prevPhase = existing?.phase;
+          const logs = existing?.logs ? [...existing.logs] : [];
+          if (phase && phase !== prevPhase) {
+            logs.push({ phase, at: now - startedAt });
+          }
+          cards[cardName] = {
+            percent: payload.cardPercent ?? 0,
+            phase,
+            startedAt,
+            elapsedMs: now - startedAt,
+            logs,
+          };
         }
-        onProgress({ overall: payload.overall ?? 0, cards: { ...cards } });
+        onProgress({
+          overall: payload.overall ?? 0,
+          cards: toPublicCards(),
+          refreshingCard,
+        });
       } else if (eventName === 'done') {
         finalResult = payload as TransactionsResponse;
       } else if (eventName === 'error') {
