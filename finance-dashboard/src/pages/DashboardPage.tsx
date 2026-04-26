@@ -12,11 +12,12 @@ import RefreshButton from '@/components/RefreshButton';
 import ScraperErrorBanner from '@/components/ScraperErrorBanner';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
+import ScrapeProgressBar from '@/components/ScrapeProgressBar';
 import { SummarySkeleton, ChartSkeleton, TransactionCardSkeleton } from '@/components/Skeletons';
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(getCurrentMonth);
-  const { data: transactions, isLoading, isError, error, refetch, cacheInfo, scraperErrors, isRefreshing, forceRefresh } = useTransactions(month);
+  const { data: transactions, isLoading, isError, error, refetch, cacheInfo, scraperErrors, isRefreshing, progress, forceRefresh } = useTransactions(month);
 
   const total = transactions ? getTotalExpenses(transactions) : 0;
   const categoryBreakdown = transactions ? getCategoryBreakdown(transactions) : [];
@@ -32,6 +33,9 @@ export default function DashboardPage() {
           <MonthPicker value={month} onChange={setMonth} />
         </div>
       </div>
+
+      {/* Progress bar — shown during scraping/refresh */}
+      <ScrapeProgressBar progress={progress} isLoading={isLoading || isRefreshing} />
 
       {/* Loading State */}
       {isLoading && (

@@ -1,4 +1,4 @@
-import type { Transaction, TransactionsResponse, AIInsights } from '@/types';
+import type { Transaction, TransactionsResponse, AIInsights, ScrapeProgress } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api`
@@ -74,6 +74,99 @@ export async function fetchTransactions(month: string, card = 'all', forceRefres
   }
 
   return body as TransactionsResponse;
+}
+
+/**
+ * Streaming version of fetchTransactions — uses Server-Sent Events to receive
+ * progress updates while the server scrapes the bank/card sites.
+ *
+ * onProgress is called with overall (0..100) and per-card phase info.
+ */
+export async function fetchTransactionsStreaming(
+  month: string,
+  card = 'all',
+  forceRefresh = false,
+  refreshCard: string | undefined,
+  onProgress: (progress: ScrapeProgress) => void,
+  signal?: AbortSignal,
+): Promise<TransactionsResponse> {
+  const params = new URLSearchParams({ month, card });
+  if (forceRefresh) params.set('forceRefresh', 'true');
+  if (refreshCard) params.set('refreshCard', refreshCard);
+
+  const res = await fetch(`${API_BASE}/transactions/stream?${params}`, {
+    headers: { ...authHeaders(), Accept: 'text/event-stream' },
+    signal,
+  });
+
+  if (res.status === 401) { clearToken(); window.location.reload(); throw new Error('לא מחובר'); }
+  if (!res.ok || !res.body) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `שגיאה בטעינת עסקאות (${res.status})`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const cards: ScrapeProgress['cards'] = {};
+  let finalResult: TransactionsResponse | null = null;
+  let streamError: string | null = null;
+
+  // SSE parser — accumulate `event:` and `data:` lines until a blank line.
+  const parseSSEChunk = (chunk: string) => {
+    buffer += chunk;
+    let sepIdx;
+    // SSE separator is a blank line; tolerate \r\n
+    while ((sepIdx = buffer.search(/\r?\n\r?\n/)) !== -1) {
+      const rawEvent = buffer.slice(0, sepIdx);
+      buffer = buffer.slice(sepIdx).replace(/^\r?\n\r?\n/, '');
+
+      let eventName = 'message';
+      const dataLines: string[] = [];
+      for (const line of rawEvent.split(/\r?\n/)) {
+        if (!line || line.startsWith(':')) continue; // comment/heartbeat
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+      }
+      if (dataLines.length === 0) continue;
+
+      let payload: {
+        card?: 'cal' | 'isracard' | string;
+        phase?: string;
+        cardPercent?: number;
+        overall?: number;
+        error?: string;
+      } & Partial<TransactionsResponse>;
+      try {
+        payload = JSON.parse(dataLines.join('\n'));
+      } catch {
+        continue;
+      }
+
+      if (eventName === 'progress') {
+        const cardName = payload.card as 'cal' | 'isracard';
+        if (cardName === 'cal' || cardName === 'isracard') {
+          cards[cardName] = { percent: payload.cardPercent ?? 0, phase: payload.phase ?? '' };
+        }
+        onProgress({ overall: payload.overall ?? 0, cards: { ...cards } });
+      } else if (eventName === 'done') {
+        finalResult = payload as TransactionsResponse;
+      } else if (eventName === 'error') {
+        streamError = payload?.error || 'שגיאת שרת';
+      }
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    parseSSEChunk(decoder.decode(value, { stream: true }));
+    if (finalResult || streamError) break;
+  }
+
+  if (streamError) throw new Error(streamError);
+  if (!finalResult) throw new Error('הסטרים נסגר ללא תוצאה');
+  return finalResult;
 }
 
 export async function fetchHealth(): Promise<{ status: string; cacheSize: number }> {

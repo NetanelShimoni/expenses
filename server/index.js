@@ -131,7 +131,7 @@ if (CHROME_PATH) {
 
 // ---- Scraper functions ----
 
-async function scrapeIsracard(startDate) {
+async function scrapeIsracard(startDate, onProgress) {
   console.log('[Isracard] Starting scrape...');
   const start = Date.now();
 
@@ -156,6 +156,9 @@ async function scrapeIsracard(startDate) {
   }
 
   const scraper = createScraper(options);
+  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
+  }
   const result = await scraper.scrape(credentials);
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
@@ -168,7 +171,7 @@ async function scrapeIsracard(startDate) {
   return result;
 }
 
-async function scrapeCal(startDate) {
+async function scrapeCal(startDate, onProgress) {
   console.log('[CAL] Starting scrape...');
   const start = Date.now();
 
@@ -192,6 +195,9 @@ async function scrapeCal(startDate) {
   }
 
   const scraper = createScraper(options);
+  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
+  }
   const result = await scraper.scrape(credentials);
 
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
@@ -432,6 +438,221 @@ app.get('/api/transactions', async (req, res) => {
   } catch (err) {
     console.error('[API] Fatal error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/transactions/stream?month=YYYY-MM&card=all|cal|isracard
+ *
+ * Server-Sent Events version of /api/transactions — streams progress events
+ * while scraping so the client can show a progress bar.
+ *
+ * Events:
+ *   event: progress
+ *   data: { card, phase, cardPercent, overall }
+ *
+ *   event: done
+ *   data: { transactions, cache, scraperErrors? }
+ *
+ *   event: error
+ *   data: { error }
+ */
+
+// Phase weights — approximate progress per scraper based on emitted events
+const PHASE_PERCENT = {
+  START_SCRAPING: 5,
+  INITIALIZING: 10,
+  LOGGING_IN: 20,
+  LOGIN_SUCCESS: 40,
+  CHANGE_PASSWORD: 40,
+  LOGIN_FAILED: 100,
+  TERMINATING: 90,
+  END_SCRAPING: 100,
+};
+
+app.get('/api/transactions/stream', async (req, res) => {
+  const { month, card = 'all', forceRefresh, refreshCard } = req.query;
+
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ error: 'Invalid month format. Use YYYY-MM.' });
+  }
+
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable proxy buffering (nginx/render)
+  res.flushHeaders?.();
+
+  const send = (event, data) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  // Heartbeat to keep connection alive through proxies
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(`: ping\n\n`);
+  }, 15000);
+
+  let clientClosed = false;
+  req.on('close', () => {
+    clientClosed = true;
+    clearInterval(heartbeat);
+  });
+
+  // Per-card progress tracking
+  const cardProgress = { cal: 0, isracard: 0 };
+  const activeCards = new Set();
+
+  const computeOverall = () => {
+    const cards = [...activeCards];
+    if (cards.length === 0) return 100;
+    const sum = cards.reduce((s, c) => s + (cardProgress[c] || 0), 0);
+    return Math.round(sum / cards.length);
+  };
+
+  const emitProgress = (cardName, phase) => {
+    cardProgress[cardName] = PHASE_PERCENT[phase] ?? cardProgress[cardName];
+    send('progress', {
+      card: cardName,
+      phase,
+      cardPercent: cardProgress[cardName],
+      overall: computeOverall(),
+    });
+  };
+
+  // Slow "creep" — between LOGIN_SUCCESS and TERMINATING the scraper does heavy
+  // fetching but emits no events. We tick a soft progress upward to give the
+  // user feedback.
+  const creepTimers = {};
+  const startCreep = (cardName) => {
+    stopCreep(cardName);
+    creepTimers[cardName] = setInterval(() => {
+      const cur = cardProgress[cardName] || 0;
+      if (cur < 85) {
+        cardProgress[cardName] = Math.min(85, cur + 2);
+        send('progress', {
+          card: cardName,
+          phase: 'FETCHING_DATA',
+          cardPercent: cardProgress[cardName],
+          overall: computeOverall(),
+        });
+      }
+    }, 1500);
+  };
+  const stopCreep = (cardName) => {
+    if (creepTimers[cardName]) {
+      clearInterval(creepTimers[cardName]);
+      delete creepTimers[cardName];
+    }
+  };
+
+  const onCardProgress = (cardName) => (phase) => {
+    if (phase === 'LOGIN_SUCCESS') startCreep(cardName);
+    if (phase === 'TERMINATING' || phase === 'END_SCRAPING' || phase === 'LOGIN_FAILED') stopCreep(cardName);
+    emitProgress(cardName, phase);
+  };
+
+  // Force-refresh: invalidate as needed
+  if (forceRefresh === 'true') {
+    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard') ? refreshCard : card;
+    invalidateCache(cardToInvalidate, month);
+    console.log(`[API/stream] Force refresh requested for ${cardToInvalidate} / ${month}`);
+  }
+
+  console.log(`\n[API/stream] GET /api/transactions/stream - month: ${month}, card: ${card}`);
+  const startTime = Date.now();
+  const [year, monthNum] = month.split('-').map(Number);
+  const startDate = new Date(year, monthNum - 1, 1);
+
+  const cacheInfo = {};
+  const scraperErrors = [];
+
+  const buildCardTask = (cardName, scrapeFn) => {
+    const cached = getCached(cardName, month);
+    if (cached) {
+      cacheInfo[cardName] = { fromCache: true, cachedAt: cached.timestamp };
+      cardProgress[cardName] = 100;
+      return Promise.resolve(cached.data);
+    }
+    activeCards.add(cardName);
+    // initial event
+    setImmediate(() => emitProgress(cardName, 'START_SCRAPING'));
+    return scrapeFn(startDate, onCardProgress(cardName))
+      .then((result) => {
+        const txns = mapTransactions(result, cardName, month);
+        setCache(cardName, month, txns);
+        cacheInfo[cardName] = { fromCache: false, cachedAt: Date.now() };
+        cardProgress[cardName] = 100;
+        emitProgress(cardName, 'END_SCRAPING');
+        return txns;
+      })
+      .catch((err) => {
+        console.error(`[${cardName}] Error:`, err.message);
+        scraperErrors.push({ card: cardName, message: err.message });
+        cardProgress[cardName] = 100;
+        stopCreep(cardName);
+        send('progress', {
+          card: cardName,
+          phase: 'ERROR',
+          cardPercent: 100,
+          overall: computeOverall(),
+        });
+        return [];
+      });
+  };
+
+  try {
+    let allTransactions = [];
+
+    if (card === 'all') {
+      const tasks = [
+        buildCardTask('cal', scrapeCal),
+        buildCardTask('isracard', scrapeIsracard),
+      ];
+      // If both came from cache, mark cards as active just for the overall calc — but they are already 100.
+      const results = await Promise.all(tasks);
+      allTransactions = results.flat();
+    } else if (card === 'cal') {
+      allTransactions = await buildCardTask('cal', scrapeCal);
+    } else if (card === 'isracard') {
+      allTransactions = await buildCardTask('isracard', scrapeIsracard);
+    }
+
+    Object.keys(creepTimers).forEach(stopCreep);
+
+    if (clientClosed) {
+      clearInterval(heartbeat);
+      return;
+    }
+
+    allTransactions.sort((a, b) => b.date.localeCompare(a.date));
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[API/stream] Response: ${allTransactions.length} transactions in ${elapsed}s`);
+
+    const fromCache = Object.values(cacheInfo).some((c) => c.fromCache);
+    const oldestCachedAt = Object.values(cacheInfo)
+      .filter((c) => c.fromCache)
+      .reduce((oldest, c) => Math.min(oldest, c.cachedAt), Infinity);
+
+    send('done', {
+      transactions: allTransactions,
+      cache: {
+        fromCache,
+        cachedAt: fromCache ? oldestCachedAt : null,
+        details: cacheInfo,
+      },
+      scraperErrors: scraperErrors.length > 0 ? scraperErrors : undefined,
+    });
+  } catch (err) {
+    console.error('[API/stream] Fatal error:', err);
+    send('error', { error: err.message });
+  } finally {
+    clearInterval(heartbeat);
+    Object.keys(creepTimers).forEach(stopCreep);
+    if (!res.writableEnded) res.end();
   }
 });
 

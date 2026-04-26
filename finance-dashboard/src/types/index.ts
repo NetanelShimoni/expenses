@@ -43,6 +43,11 @@ export interface TransactionsResponse {
   scraperErrors?: ScraperError[];
 }
 
+export interface ScrapeProgress {
+  overall: number;                                  // 0..100 average across active cards
+  cards: Partial<Record<'cal' | 'isracard', { percent: number; phase: string }>>;
+}
+
 // ---- AI Insights ----
 
 export interface CategoryInsight {

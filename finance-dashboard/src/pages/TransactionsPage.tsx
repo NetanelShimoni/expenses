@@ -10,6 +10,7 @@ import RefreshButton from '@/components/RefreshButton';
 import ScraperErrorBanner from '@/components/ScraperErrorBanner';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
+import ScrapeProgressBar from '@/components/ScrapeProgressBar';
 import { TransactionCardSkeleton } from '@/components/Skeletons';
 
 export default function TransactionsPage() {
@@ -17,7 +18,7 @@ export default function TransactionsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { data: transactions, isLoading, isError, error, refetch, cacheInfo, scraperErrors, isRefreshing, forceRefresh } = useTransactions(month);
+  const { data: transactions, isLoading, isError, error, refetch, cacheInfo, scraperErrors, isRefreshing, progress, forceRefresh } = useTransactions(month);
 
   // Get unique categories
   const categories = useMemo(() => {
@@ -86,6 +87,9 @@ export default function TransactionsPage() {
       {scraperErrors.length > 0 && (
         <ScraperErrorBanner errors={scraperErrors} isRetrying={isLoading} onRetry={forceRefresh} />
       )}
+
+      {/* Progress bar — shown during scraping/refresh */}
+      <ScrapeProgressBar progress={progress} isLoading={isLoading || isRefreshing} />
 
       {/* Summary Bar */}
       {filtered.length > 0 && (
