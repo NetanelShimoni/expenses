@@ -139,7 +139,7 @@ export default function InsightsPage() {
                 <div key={i} className="mt-2 rounded-lg bg-amber-100/50 px-3 py-2 dark:bg-amber-900/30">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                      {alert.card === 'cal' ? 'כאל' : alert.card === 'isracard' ? 'ישראכרט' : alert.card}
+                      {alert.card === 'cal' ? 'כאל' : alert.card === 'isracard' ? 'ישראכרט' : alert.card === 'isracard-hot' ? 'ישראכרט הוט' : alert.card}
                     </span>
                     <span className="text-sm font-bold text-amber-700 dark:text-amber-300">
                       {formatCurrency(alert.amount)}

@@ -171,6 +171,46 @@ async function scrapeIsracard(startDate, onProgress) {
   return result;
 }
 
+async function scrapeIsracardHot(startDate, onProgress) {
+  console.log('[Isracard HOT] Starting scrape...');
+  const start = Date.now();
+
+  const options = {
+    companyId: CompanyTypes.isracard,
+    startDate,
+    combineInstallments: false,
+    showBrowser: false,
+    timeout: 120000,
+    defaultTimeout: 120000,
+    ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
+  };
+
+  const credentials = {
+    id: process.env.HOT_ISRACARD_ID,
+    card6Digits: process.env.HOT_ISRACARD_CARD6,
+    password: process.env.HOT_ISRACARD_PASSWORD,
+  };
+
+  if (!credentials.id || !credentials.card6Digits || !credentials.password) {
+    throw new Error('Missing Isracard HOT credentials in .env');
+  }
+
+  const scraper = createScraper(options);
+  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
+  }
+  const result = await scraper.scrape(credentials);
+
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+  console.log(`[Isracard HOT] Scrape completed in ${elapsed}s - success: ${result.success}`);
+
+  if (!result.success) {
+    throw new Error(`Isracard HOT scrape failed: ${result.errorType} - ${result.errorMessage}`);
+  }
+
+  return result;
+}
+
 async function scrapeCal(startDate, onProgress) {
   console.log('[CAL] Starting scrape...');
   const start = Date.now();
@@ -275,6 +315,7 @@ function invalidateCache(card, month) {
   if (card === 'all') {
     cache.delete(getCacheKey('cal', month));
     cache.delete(getCacheKey('isracard', month));
+    cache.delete(getCacheKey('isracard-hot', month));
   } else {
     cache.delete(getCacheKey(card, month));
   }
@@ -303,10 +344,10 @@ app.get('/api/transactions', async (req, res) => {
   }
 
   // If forceRefresh requested, invalidate cache first.
-  // If refreshCard is provided (e.g. 'cal' or 'isracard'), only invalidate that one
-  // — keeps the other card's cached data intact so we don't re-scrape it unnecessarily.
+  // If refreshCard is provided (e.g. 'cal', 'isracard', 'isracard-hot'), only invalidate that one
+  // — keeps the other cards' cached data intact so we don't re-scrape them unnecessarily.
   if (forceRefresh === 'true') {
-    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard') ? refreshCard : card;
+    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard' || refreshCard === 'isracard-hot') ? refreshCard : card;
     invalidateCache(cardToInvalidate, month);
     console.log(`[API] Force refresh requested for ${cardToInvalidate} / ${month}`);
   }
@@ -325,9 +366,10 @@ app.get('/api/transactions', async (req, res) => {
     const scraperErrors = [];
 
     if (card === 'all') {
-      // ===== PARALLEL SCRAPING — both at the same time! =====
+      // ===== PARALLEL SCRAPING — all at the same time! =====
       const cachedCal = getCached('cal', month);
       const cachedIsracard = getCached('isracard', month);
+      const cachedIsracardHot = getCached('isracard-hot', month);
 
       const promises = [];
       const labels = [];
@@ -376,6 +418,28 @@ app.get('/api/transactions', async (req, res) => {
         labels.push('isracard (cached)');
       }
 
+      if (!cachedIsracardHot) {
+        promises.push(
+          scrapeIsracardHot(startDate)
+            .then((result) => {
+              const txns = mapTransactions(result, 'isracard-hot', month);
+              setCache('isracard-hot', month, txns);
+              cacheInfo['isracard-hot'] = { fromCache: false, cachedAt: Date.now() };
+              return txns;
+            })
+            .catch((err) => {
+              console.error('[Isracard HOT] Error:', err.message);
+              scraperErrors.push({ card: 'isracard-hot', message: err.message });
+              return []; // Don't fail everything if one card fails
+            })
+        );
+        labels.push('isracard-hot');
+      } else {
+        promises.push(Promise.resolve(cachedIsracardHot.data));
+        cacheInfo['isracard-hot'] = { fromCache: true, cachedAt: cachedIsracardHot.timestamp };
+        labels.push('isracard-hot (cached)');
+      }
+
       console.log(`[API] Scraping in parallel: [${labels.join(', ')}]`);
       const results = await Promise.all(promises);
       allTransactions = results.flat();
@@ -411,6 +475,23 @@ app.get('/api/transactions', async (req, res) => {
         } catch (err) {
           console.error('[Isracard] Error:', err.message);
           scraperErrors.push({ card: 'isracard', message: err.message });
+        }
+      }
+
+    } else if (card === 'isracard-hot') {
+      const cached = getCached('isracard-hot', month);
+      if (cached) {
+        allTransactions = cached.data;
+        cacheInfo['isracard-hot'] = { fromCache: true, cachedAt: cached.timestamp };
+      } else {
+        try {
+          const result = await scrapeIsracardHot(startDate);
+          allTransactions = mapTransactions(result, 'isracard-hot', month);
+          setCache('isracard-hot', month, allTransactions);
+          cacheInfo['isracard-hot'] = { fromCache: false, cachedAt: Date.now() };
+        } catch (err) {
+          console.error('[Isracard HOT] Error:', err.message);
+          scraperErrors.push({ card: 'isracard-hot', message: err.message });
         }
       }
     }
@@ -502,7 +583,7 @@ app.get('/api/transactions/stream', async (req, res) => {
   });
 
   // Per-card progress tracking
-  const cardProgress = { cal: 0, isracard: 0 };
+  const cardProgress = { cal: 0, isracard: 0, 'isracard-hot': 0 };
   const activeCards = new Set();
 
   const computeOverall = () => {
@@ -556,7 +637,7 @@ app.get('/api/transactions/stream', async (req, res) => {
 
   // Force-refresh: invalidate as needed
   if (forceRefresh === 'true') {
-    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard') ? refreshCard : card;
+    const cardToInvalidate = (refreshCard === 'cal' || refreshCard === 'isracard' || refreshCard === 'isracard-hot') ? refreshCard : card;
     invalidateCache(cardToInvalidate, month);
     console.log(`[API/stream] Force refresh requested for ${cardToInvalidate} / ${month}`);
   }
@@ -610,14 +691,17 @@ app.get('/api/transactions/stream', async (req, res) => {
       const tasks = [
         buildCardTask('cal', scrapeCal),
         buildCardTask('isracard', scrapeIsracard),
+        buildCardTask('isracard-hot', scrapeIsracardHot),
       ];
-      // If both came from cache, mark cards as active just for the overall calc — but they are already 100.
+      // If all came from cache, mark cards as active just for the overall calc — but they are already 100.
       const results = await Promise.all(tasks);
       allTransactions = results.flat();
     } else if (card === 'cal') {
       allTransactions = await buildCardTask('cal', scrapeCal);
     } else if (card === 'isracard') {
       allTransactions = await buildCardTask('isracard', scrapeIsracard);
+    } else if (card === 'isracard-hot') {
+      allTransactions = await buildCardTask('isracard-hot', scrapeIsracardHot);
     }
 
     Object.keys(creepTimers).forEach(stopCreep);
@@ -672,6 +756,7 @@ app.get('/api/health', (req, res) => {
     cacheSize: cache.size,
     env: {
       hasIsracardCreds: !!(process.env.ISRACARD_ID && process.env.ISRACARD_CARD6 && process.env.ISRACARD_PASSWORD),
+      hasIsracardHotCreds: !!(process.env.HOT_ISRACARD_ID && process.env.HOT_ISRACARD_CARD6 && process.env.HOT_ISRACARD_PASSWORD),
       hasCalCreds: !!(process.env.CAL_USERNAME && process.env.CAL_PASSWORD),
     }
   });

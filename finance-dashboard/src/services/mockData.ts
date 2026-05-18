@@ -32,4 +32,8 @@ export const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'isracard-2026-04-02-028', date: '2026-04-02', time: '08:00', amount: 1100.00, business: 'ביטוח לאומי - תשלום רבעוני', category: 'חשבונות', card: 'isracard', originalCurrency: 'ILS' },
   { id: 'cal-2026-04-01-029', date: '2026-04-01', time: '14:20', amount: 267.00, business: 'דור אלון - תחנת דלק', category: 'תחבורה', card: 'cal', originalCurrency: 'ILS' },
   { id: 'isracard-2026-04-01-030', date: '2026-04-01', time: '09:00', amount: 38.90, business: 'APPLE.COM/BILL', category: 'בילויים', card: 'isracard', originalCurrency: 'USD' },
+  { id: 'isracard-hot-2026-04-15-031', date: '2026-04-15', time: '11:00', amount: 349.00, business: 'HOT - חבילת טלוויזיה', category: 'חשבונות', card: 'isracard-hot', originalCurrency: 'ILS' },
+  { id: 'isracard-hot-2026-04-12-032', date: '2026-04-12', time: '16:30', amount: 178.50, business: 'HOT MOBILE - חשבון חודשי', category: 'חשבונות', card: 'isracard-hot', originalCurrency: 'ILS' },
+  { id: 'isracard-hot-2026-04-09-033', date: '2026-04-09', time: '10:15', amount: 92.00, business: 'שופרסל אונליין - הוט', category: 'מזון', card: 'isracard-hot', originalCurrency: 'ILS' },
+  { id: 'isracard-hot-2026-04-05-034', date: '2026-04-05', time: '19:45', amount: 215.00, business: 'זארה - קניון הוט', category: 'קניות', card: 'isracard-hot', originalCurrency: 'ILS' },
 ];

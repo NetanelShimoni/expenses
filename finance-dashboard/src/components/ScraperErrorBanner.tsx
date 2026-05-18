@@ -3,6 +3,7 @@ import type { ScraperError } from '@/types';
 const CARD_LABELS: Record<string, string> = {
   cal: 'כאל',
   isracard: 'ישראכרט',
+  'isracard-hot': 'ישראכרט הוט',
 };
 
 interface ScraperErrorBannerProps {

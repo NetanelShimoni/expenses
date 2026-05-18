@@ -7,6 +7,7 @@ const CARDS = [
   { value: 'all', label: 'הכל' },
   { value: 'cal', label: 'כאל' },
   { value: 'isracard', label: 'ישראכרט' },
+  { value: 'isracard-hot', label: 'ישראכרט הוט' },
 ];
 
 export default function CardFilter({ selected, onChange }: CardFilterProps) {

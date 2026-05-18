@@ -18,6 +18,12 @@ services:
         sync: false
       - key: ISRACARD_PASSWORD
         sync: false
+      - key: HOT_ISRACARD_ID
+        sync: false
+      - key: HOT_ISRACARD_CARD6
+        sync: false
+      - key: HOT_ISRACARD_PASSWORD
+        sync: false
       - key: CAL_USERNAME
         sync: false
       - key: CAL_PASSWORD

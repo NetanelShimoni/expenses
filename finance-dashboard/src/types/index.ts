@@ -5,7 +5,7 @@ export interface Transaction {
   amount: number;
   business: string;
   category: string;
-  card: 'cal' | 'isracard' | string;
+  card: 'cal' | 'isracard' | 'isracard-hot' | string;
   originalCurrency: string;
 }
 
@@ -33,7 +33,7 @@ export interface CacheInfo {
 }
 
 export interface ScraperError {
-  card: 'cal' | 'isracard' | string;
+  card: 'cal' | 'isracard' | 'isracard-hot' | string;
   message: string;
 }
 
@@ -45,13 +45,13 @@ export interface TransactionsResponse {
 
 export interface ScrapeProgress {
   overall: number;                                  // 0..100 average across active cards
-  cards: Partial<Record<'cal' | 'isracard', {
+  cards: Partial<Record<'cal' | 'isracard' | 'isracard-hot', {
     percent: number;
     phase: string;
     elapsedMs: number;                              // time since the card's first progress event
     logs: { phase: string; at: number }[];          // chronological phase log (relative ms)
   }>>;
-  refreshingCard?: 'cal' | 'isracard';              // when set, only this card is being refreshed
+  refreshingCard?: 'cal' | 'isracard' | 'isracard-hot';              // when set, only this card is being refreshed
 }
 
 // ---- AI Insights ----

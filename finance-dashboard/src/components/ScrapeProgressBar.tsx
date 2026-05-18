@@ -21,6 +21,7 @@ const PHASE_LABELS: Record<string, string> = {
 const CARD_LABELS: Record<string, string> = {
   cal: 'כאל',
   isracard: 'ישראכרט',
+  'isracard-hot': 'ישראכרט הוט',
 };
 
 function formatElapsed(ms: number): string {
@@ -37,7 +38,7 @@ export default function ScrapeProgressBar({ progress, isLoading }: ScrapeProgres
 
   const focusCard = progress.refreshingCard;
   const allEntries = Object.entries(progress.cards) as [
-    'cal' | 'isracard',
+    'cal' | 'isracard' | 'isracard-hot',
     NonNullable<ScrapeProgress['cards']['cal']>,
   ][];
 
