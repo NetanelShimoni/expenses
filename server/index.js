@@ -401,7 +401,8 @@ app.get('/api/transactions', async (req, res) => {
           scrapeIsracard(startDate)
             .then((result) => {
               const txns = mapTransactions(result, 'isracard', month);
-              setCache('isracard', month, txns);
+              if (txns.length > 0) setCache('isracard', month, txns);
+              else console.warn('[Isracard] Scraper returned 0 transactions — skipping cache to allow retry');
               cacheInfo.isracard = { fromCache: false, cachedAt: Date.now() };
               return txns;
             })
@@ -418,12 +419,19 @@ app.get('/api/transactions', async (req, res) => {
         labels.push('isracard (cached)');
       }
 
+      // Stagger HOT by 12s when both Isracard scrapers need fresh data — same login domain
+      const hotStartDelay = (!cachedIsracard && !cachedIsracardHot) ? 12000 : 0;
+
       if (!cachedIsracardHot) {
-        promises.push(
+        const hotPromise = (hotStartDelay > 0
+          ? new Promise(r => setTimeout(r, hotStartDelay))
+          : Promise.resolve()
+        ).then(() =>
           scrapeIsracardHot(startDate)
             .then((result) => {
               const txns = mapTransactions(result, 'isracard-hot', month);
-              setCache('isracard-hot', month, txns);
+              if (txns.length > 0) setCache('isracard-hot', month, txns);
+              else console.warn('[Isracard HOT] Scraper returned 0 transactions — skipping cache to allow retry');
               cacheInfo['isracard-hot'] = { fromCache: false, cachedAt: Date.now() };
               return txns;
             })
@@ -433,6 +441,7 @@ app.get('/api/transactions', async (req, res) => {
               return []; // Don't fail everything if one card fails
             })
         );
+        promises.push(hotPromise);
         labels.push('isracard-hot');
       } else {
         promises.push(Promise.resolve(cachedIsracardHot.data));
@@ -453,7 +462,7 @@ app.get('/api/transactions', async (req, res) => {
         try {
           const result = await scrapeCal(startDate);
           allTransactions = mapTransactions(result, 'cal', month);
-          setCache('cal', month, allTransactions);
+          if (allTransactions.length > 0) setCache('cal', month, allTransactions);
           cacheInfo.cal = { fromCache: false, cachedAt: Date.now() };
         } catch (err) {
           console.error('[CAL] Error:', err.message);
@@ -470,7 +479,7 @@ app.get('/api/transactions', async (req, res) => {
         try {
           const result = await scrapeIsracard(startDate);
           allTransactions = mapTransactions(result, 'isracard', month);
-          setCache('isracard', month, allTransactions);
+          if (allTransactions.length > 0) setCache('isracard', month, allTransactions);
           cacheInfo.isracard = { fromCache: false, cachedAt: Date.now() };
         } catch (err) {
           console.error('[Isracard] Error:', err.message);
@@ -487,7 +496,7 @@ app.get('/api/transactions', async (req, res) => {
         try {
           const result = await scrapeIsracardHot(startDate);
           allTransactions = mapTransactions(result, 'isracard-hot', month);
-          setCache('isracard-hot', month, allTransactions);
+          if (allTransactions.length > 0) setCache('isracard-hot', month, allTransactions);
           cacheInfo['isracard-hot'] = { fromCache: false, cachedAt: Date.now() };
         } catch (err) {
           console.error('[Isracard HOT] Error:', err.message);
@@ -663,7 +672,12 @@ app.get('/api/transactions/stream', async (req, res) => {
     return scrapeFn(startDate, onCardProgress(cardName))
       .then((result) => {
         const txns = mapTransactions(result, cardName, month);
-        setCache(cardName, month, txns);
+        // Only cache non-empty results — empty may indicate a transient scraping failure
+        if (txns.length > 0) {
+          setCache(cardName, month, txns);
+        } else {
+          console.warn(`[${cardName}] Scraper returned 0 transactions — skipping cache to allow retry`);
+        }
         cacheInfo[cardName] = { fromCache: false, cachedAt: Date.now() };
         cardProgress[cardName] = 100;
         emitProgress(cardName, 'END_SCRAPING');
@@ -688,12 +702,23 @@ app.get('/api/transactions/stream', async (req, res) => {
     let allTransactions = [];
 
     if (card === 'all') {
+      // Isracard and Isracard HOT both login to digital.isracard.co.il.
+      // Running them simultaneously from the same IP can cause the HOT session to receive
+      // an empty response (success=true, accounts=[]).  Stagger HOT by 12s when both need
+      // a fresh scrape so the regular Isracard login completes before HOT starts.
+      const needsIsracardFresh = !getCached('isracard', month);
+      const needsHotFresh = !getCached('isracard-hot', month);
+      const hotDelay = (needsIsracardFresh && needsHotFresh) ? 12000 : 0;
+
+      const hotTask = hotDelay > 0
+        ? new Promise(r => setTimeout(r, hotDelay)).then(() => buildCardTask('isracard-hot', scrapeIsracardHot))
+        : buildCardTask('isracard-hot', scrapeIsracardHot);
+
       const tasks = [
         buildCardTask('cal', scrapeCal),
         buildCardTask('isracard', scrapeIsracard),
-        buildCardTask('isracard-hot', scrapeIsracardHot),
+        hotTask,
       ];
-      // If all came from cache, mark cards as active just for the overall calc — but they are already 100.
       const results = await Promise.all(tasks);
       allTransactions = results.flat();
     } else if (card === 'cal') {
