@@ -13,6 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import ScrapeProgressBar from '@/components/ScrapeProgressBar';
 import { TransactionCardSkeleton } from '@/components/Skeletons';
+import CardStatusBadges from '@/components/CardStatusBadges';
 
 export default function TransactionsPage() {
   const [month, setMonth] = useState(getCurrentMonth);
@@ -71,6 +72,9 @@ export default function TransactionsPage() {
 
       {/* Search Bar */}
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
+
+      {/* Isracard cards status */}
+      <CardStatusBadges transactions={transactions} scraperErrors={scraperErrors} isLoading={isLoading} />
 
       {/* Card Provider Filter */}
       <CardFilter selected={selectedCard} onChange={setSelectedCard} />

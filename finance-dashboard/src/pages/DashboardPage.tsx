@@ -14,6 +14,7 @@ import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import ScrapeProgressBar from '@/components/ScrapeProgressBar';
 import { SummarySkeleton, ChartSkeleton, TransactionCardSkeleton } from '@/components/Skeletons';
+import CardStatusBadges from '@/components/CardStatusBadges';
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(getCurrentMonth);
@@ -36,6 +37,9 @@ export default function DashboardPage() {
 
       {/* Progress bar — shown during scraping/refresh */}
       <ScrapeProgressBar progress={progress} isLoading={isLoading || isRefreshing} />
+
+      {/* Isracard cards status */}
+      <CardStatusBadges transactions={transactions} scraperErrors={scraperErrors} isLoading={isLoading} />
 
       {/* Loading State */}
       {isLoading && (
