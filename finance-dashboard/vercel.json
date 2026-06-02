@@ -4,6 +4,9 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
+  "env": {
+    "VITE_API_URL": "http://158.178.128.169:3001"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

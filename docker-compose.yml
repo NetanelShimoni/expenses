@@ -1,0 +1,13 @@
+services:
+  backend:
+    build: .
+    container_name: expenses-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Jerusalem
+      - SERVER_PORT=3001
