@@ -1,34 +1,53 @@
-import type { CategoryBreakdown } from '@/types';
+import type { CategoryBreakdown, Transaction } from '@/types';
 import { formatCurrency, getCategoryIcon } from '@/utils';
-import { Lightbulb } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 interface InsightCardProps {
   topCategory: CategoryBreakdown | null;
   totalExpenses: number;
   transactionCount: number;
+  transactions?: Transaction[];
 }
 
-export default function InsightCard({ topCategory, totalExpenses, transactionCount }: InsightCardProps) {
+export default function InsightCard({ topCategory, totalExpenses, transactions = [] }: InsightCardProps) {
   if (!topCategory) return null;
 
-  const avgPerTransaction = transactionCount > 0 ? totalExpenses / transactionCount : 0;
+  const debitCount = transactions.filter((t) => !t.isCredit).length;
+  const avgPerTransaction = debitCount > 0 ? totalExpenses / debitCount : 0;
+  const totalCredits = transactions.filter((t) => t.isCredit).reduce((s, t) => s + t.amount, 0);
 
   return (
-    <div className="animate-fade-in-up rounded-2xl bg-gradient-to-bl from-amber-50 to-orange-50 p-4 shadow-sm dark:from-amber-950/30 dark:to-orange-950/30" style={{ animationDelay: '0.15s' }}>
-      <div className="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
-        <Lightbulb size={16} />
-        <h3 className="text-sm font-semibold">תובנות החודש</h3>
+    <div
+      className="animate-fade-in-up rounded-3xl p-4 shadow-sm"
+      style={{
+        background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+        boxShadow: '0 2px 12px rgba(251,191,36,0.15)',
+      }}
+      // dark mode inline override not possible with inline style — use className for dark
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-lg">💡</span>
+        <h3 className="text-sm font-bold text-amber-800">תובנות החודש</h3>
       </div>
-      <div className="space-y-2">
-        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-          <span className="text-lg">{getCategoryIcon(topCategory.category)}</span>{' '}
-          הקטגוריה המובילה: <strong className="text-slate-800 dark:text-slate-200">{topCategory.category}</strong> עם{' '}
-          <strong className="text-slate-800 dark:text-slate-200">{formatCurrency(topCategory.total)}</strong>{' '}
-          ({topCategory.percentage.toFixed(0)}% מסך ההוצאות)
+      <div className="space-y-2.5">
+        <p className="text-xs leading-relaxed text-amber-900/80">
+          <span className="text-base">{getCategoryIcon(topCategory.category)}</span>{' '}
+          הקטגוריה המובילה:{' '}
+          <strong className="text-amber-900">{topCategory.category}</strong>{' '}—{' '}
+          <strong className="text-amber-900">{formatCurrency(topCategory.total)}</strong>{' '}
+          ({topCategory.percentage.toFixed(0)}%)
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-500">
+        <p className="text-xs text-amber-700/70">
           ממוצע לעסקה: {formatCurrency(avgPerTransaction)}
         </p>
+        {totalCredits > 0 && (
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-100 px-3 py-2">
+            <TrendingUp size={13} className="text-emerald-600" />
+            <p className="text-xs font-semibold text-emerald-700">
+              זיכויים החזירו לך {formatCurrency(totalCredits)} החודש
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

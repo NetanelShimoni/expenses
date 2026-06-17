@@ -76,6 +76,7 @@ export default function DashboardPage() {
                 totalExpenses={total}
                 transactionCount={transactions.length}
                 month={month}
+                transactions={transactions}
               />
 
               {/* Category Chart */}
@@ -86,6 +87,7 @@ export default function DashboardPage() {
                 topCategory={categoryBreakdown[0] ?? null}
                 totalExpenses={total}
                 transactionCount={transactions.length}
+                transactions={transactions}
               />
 
               {/* Recent Transactions */}
@@ -102,7 +104,7 @@ export default function DashboardPage() {
                     <ChevronLeft size={14} />
                   </Link>
                 </div>
-                <div className="space-y-2">
+                <div className="stagger-list space-y-2">
                   {recentTxns.map((txn) => (
                     <TransactionCard key={txn.id} transaction={txn} />
                   ))}

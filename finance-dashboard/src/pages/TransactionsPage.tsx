@@ -55,7 +55,7 @@ export default function TransactionsPage() {
   const grouped = useMemo(() => groupTransactionsByDate(filtered), [filtered]);
 
   const filteredTotal = useMemo(
-    () => filtered.reduce((sum, t) => sum + t.amount, 0),
+    () => filtered.reduce((sum, t) => sum + (t.isCredit ? -t.amount : t.amount), 0),
     [filtered],
   );
 
@@ -135,7 +135,7 @@ export default function TransactionsPage() {
           <h4 className="mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500">
             {formatFullDate(group.date)}
           </h4>
-          <div className="space-y-2">
+          <div className="stagger-list space-y-2">
             {group.transactions.map((txn) => (
               <TransactionCard key={txn.id} transaction={txn} />
             ))}

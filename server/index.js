@@ -131,19 +131,14 @@ if (CHROME_PATH) {
 
 // ---- Scraper functions ----
 
-async function scrapeIsracard(startDate, onProgress) {
-  console.log('[Isracard] Starting scrape...');
-  const start = Date.now();
+function ts() { return new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
 
-  const options = {
-    companyId: CompanyTypes.isracard,
-    startDate,
-    combineInstallments: false,
-    showBrowser: false,
-    timeout: 120000,
-    defaultTimeout: 120000,
-    ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
-  };
+async function scrapeIsracard(startDate, onProgress) {
+  const tag = '[ישראכרט]';
+  const start = Date.now();
+  const elapsed = () => `${((Date.now() - start) / 1000).toFixed(1)}s`;
+
+  console.log(`\n${ts()} ${tag} ▶ מתחיל גריפה...`);
 
   const credentials = {
     id: process.env.ISRACARD_ID,
@@ -152,28 +147,10 @@ async function scrapeIsracard(startDate, onProgress) {
   };
 
   if (!credentials.id || !credentials.card6Digits || !credentials.password) {
+    console.error(`${ts()} ${tag} ✗ חסרים פרטי כניסה ב-.env`);
     throw new Error('Missing Isracard credentials in .env');
   }
-
-  const scraper = createScraper(options);
-  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
-    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
-  }
-  const result = await scraper.scrape(credentials);
-
-  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[Isracard] Scrape completed in ${elapsed}s - success: ${result.success}`);
-
-  if (!result.success) {
-    throw new Error(`Isracard scrape failed: ${result.errorType} - ${result.errorMessage}`);
-  }
-
-  return result;
-}
-
-async function scrapeIsracardHot(startDate, onProgress) {
-  console.log('[Isracard HOT] Starting scrape...');
-  const start = Date.now();
+  console.log(`${ts()} ${tag}   ✓ פרטי כניסה נטענו (ID: ${credentials.id.slice(0,3)}***, 6ס: ${credentials.card6Digits})`);
 
   const options = {
     companyId: CompanyTypes.isracard,
@@ -185,6 +162,35 @@ async function scrapeIsracardHot(startDate, onProgress) {
     ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
   };
 
+  const scraper = createScraper(options);
+  if (typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => {
+      const phase = payload?.type || 'UNKNOWN';
+      console.log(`${ts()} ${tag}   ⟳ ${phase} (${elapsed()})`);
+      if (typeof onProgress === 'function') onProgress(phase);
+    });
+  }
+
+  console.log(`${ts()} ${tag}   ⟳ מפעיל דפדפן ומתחבר לאתר...`);
+  const result = await scraper.scrape(credentials);
+
+  if (!result.success) {
+    console.error(`${ts()} ${tag} ✗ נכשל אחרי ${elapsed()} — ${result.errorType}: ${result.errorMessage}`);
+    throw new Error(`Isracard scrape failed: ${result.errorType} - ${result.errorMessage}`);
+  }
+
+  const txnCount = result.accounts?.reduce((s, a) => s + a.txns.length, 0) ?? 0;
+  console.log(`${ts()} ${tag} ✓ הסתיים ב-${elapsed()} — ${result.accounts?.length ?? 0} חשבונות, ${txnCount} עסקאות\n`);
+  return result;
+}
+
+async function scrapeIsracardHot(startDate, onProgress) {
+  const tag = '[ישראכרט הוט]';
+  const start = Date.now();
+  const elapsed = () => `${((Date.now() - start) / 1000).toFixed(1)}s`;
+
+  console.log(`\n${ts()} ${tag} ▶ מתחיל גריפה...`);
+
   const credentials = {
     id: process.env.HOT_ISRACARD_ID,
     card6Digits: process.env.HOT_ISRACARD_CARD6,
@@ -192,28 +198,60 @@ async function scrapeIsracardHot(startDate, onProgress) {
   };
 
   if (!credentials.id || !credentials.card6Digits || !credentials.password) {
+    console.error(`${ts()} ${tag} ✗ חסרים פרטי כניסה ב-.env`);
     throw new Error('Missing Isracard HOT credentials in .env');
   }
+  console.log(`${ts()} ${tag}   ✓ פרטי כניסה נטענו (ID: ${credentials.id.slice(0,3)}***, 6ס: ${credentials.card6Digits})`);
+
+  const options = {
+    companyId: CompanyTypes.isracard,
+    startDate,
+    combineInstallments: false,
+    showBrowser: false,
+    timeout: 120000,
+    defaultTimeout: 120000,
+    ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
+  };
 
   const scraper = createScraper(options);
-  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
-    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
+  if (typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => {
+      const phase = payload?.type || 'UNKNOWN';
+      console.log(`${ts()} ${tag}   ⟳ ${phase} (${elapsed()})`);
+      if (typeof onProgress === 'function') onProgress(phase);
+    });
   }
+
+  console.log(`${ts()} ${tag}   ⟳ מפעיל דפדפן ומתחבר לאתר...`);
   const result = await scraper.scrape(credentials);
 
-  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[Isracard HOT] Scrape completed in ${elapsed}s - success: ${result.success}`);
-
   if (!result.success) {
+    console.error(`${ts()} ${tag} ✗ נכשל אחרי ${elapsed()} — ${result.errorType}: ${result.errorMessage}`);
     throw new Error(`Isracard HOT scrape failed: ${result.errorType} - ${result.errorMessage}`);
   }
 
+  const txnCount = result.accounts?.reduce((s, a) => s + a.txns.length, 0) ?? 0;
+  console.log(`${ts()} ${tag} ✓ הסתיים ב-${elapsed()} — ${result.accounts?.length ?? 0} חשבונות, ${txnCount} עסקאות\n`);
   return result;
 }
 
 async function scrapeCal(startDate, onProgress) {
-  console.log('[CAL] Starting scrape...');
+  const tag = '[כאל]';
   const start = Date.now();
+  const elapsed = () => `${((Date.now() - start) / 1000).toFixed(1)}s`;
+
+  console.log(`\n${ts()} ${tag} ▶ מתחיל גריפה...`);
+
+  const credentials = {
+    username: process.env.CAL_USERNAME,
+    password: process.env.CAL_PASSWORD,
+  };
+
+  if (!credentials.username || !credentials.password) {
+    console.error(`${ts()} ${tag} ✗ חסרים פרטי כניסה ב-.env`);
+    throw new Error('Missing CAL credentials in .env');
+  }
+  console.log(`${ts()} ${tag}   ✓ פרטי כניסה נטענו (user: ${credentials.username})`);
 
   const options = {
     companyId: CompanyTypes.visaCal,
@@ -225,28 +263,25 @@ async function scrapeCal(startDate, onProgress) {
     ...(CHROME_PATH && { executablePath: CHROME_PATH, args: ['--no-sandbox', '--disable-setuid-sandbox'] }),
   };
 
-  const credentials = {
-    username: process.env.CAL_USERNAME,
-    password: process.env.CAL_PASSWORD,
-  };
-
-  if (!credentials.username || !credentials.password) {
-    throw new Error('Missing CAL credentials in .env');
-  }
-
   const scraper = createScraper(options);
-  if (typeof onProgress === 'function' && typeof scraper.onProgress === 'function') {
-    scraper.onProgress((_companyId, payload) => onProgress(payload?.type || 'UNKNOWN'));
+  if (typeof scraper.onProgress === 'function') {
+    scraper.onProgress((_companyId, payload) => {
+      const phase = payload?.type || 'UNKNOWN';
+      console.log(`${ts()} ${tag}   ⟳ ${phase} (${elapsed()})`);
+      if (typeof onProgress === 'function') onProgress(phase);
+    });
   }
+
+  console.log(`${ts()} ${tag}   ⟳ מפעיל דפדפן ומתחבר לאתר...`);
   const result = await scraper.scrape(credentials);
 
-  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[CAL] Scrape completed in ${elapsed}s - success: ${result.success}`);
-
   if (!result.success) {
+    console.error(`${ts()} ${tag} ✗ נכשל אחרי ${elapsed()} — ${result.errorType}: ${result.errorMessage}`);
     throw new Error(`CAL scrape failed: ${result.errorType} - ${result.errorMessage}`);
   }
 
+  const txnCount = result.accounts?.reduce((s, a) => s + a.txns.length, 0) ?? 0;
+  console.log(`${ts()} ${tag} ✓ הסתיים ב-${elapsed()} — ${result.accounts?.length ?? 0} חשבונות, ${txnCount} עסקאות\n`);
   return result;
 }
 
@@ -258,6 +293,8 @@ function mapTransactions(scrapeResult, cardType, monthFilter) {
 
   for (const account of scrapeResult.accounts) {
     for (const txn of account.txns) {
+      // DEBUG: log raw txn fields to understand credit structure
+      console.log(`[DEBUG][${cardType}] chargedAmount=${txn.chargedAmount} originalAmount=${txn.originalAmount} description="${txn.description}" memo="${txn.memo}" dealSumType=${txn.dealSumType}`);
       const d = new Date(txn.date);
       // Filter by requested month
       if (d.getMonth() + 1 !== filterMonth || d.getFullYear() !== filterYear) {
@@ -265,6 +302,7 @@ function mapTransactions(scrapeResult, cardType, monthFilter) {
       }
 
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const isCredit = txn.chargedAmount > 0;
       const amount = Math.abs(txn.chargedAmount);
       const business = txn.description || 'לא ידוע';
 
@@ -279,6 +317,7 @@ function mapTransactions(scrapeResult, cardType, monthFilter) {
         id: `${cardType}-${dateStr}-${transactions.length}-${Math.random().toString(36).substring(2, 7)}`,
         date: dateStr,
         amount,
+        isCredit,
         business,
         category,
         card: cardType,
@@ -396,37 +435,36 @@ app.get('/api/transactions', async (req, res) => {
         labels.push('cal (cached)');
       }
 
+      // Save the Isracard promise so HOT can chain after it when both need fresh data.
+      // Both scrapers log into digital.isracard.co.il — overlapping sessions cause empty responses.
+      let isracardPromise;
       if (!cachedIsracard) {
-        promises.push(
-          scrapeIsracard(startDate)
-            .then((result) => {
-              const txns = mapTransactions(result, 'isracard', month);
-              if (txns.length > 0) setCache('isracard', month, txns);
-              else console.warn('[Isracard] Scraper returned 0 transactions — skipping cache to allow retry');
-              cacheInfo.isracard = { fromCache: false, cachedAt: Date.now() };
-              return txns;
-            })
-            .catch((err) => {
-              console.error('[Isracard] Error:', err.message);
-              scraperErrors.push({ card: 'isracard', message: err.message });
-              return []; // Don't fail everything if one card fails
-            })
-        );
+        isracardPromise = scrapeIsracard(startDate)
+          .then((result) => {
+            const txns = mapTransactions(result, 'isracard', month);
+            if (txns.length > 0) setCache('isracard', month, txns);
+            else console.warn('[Isracard] Scraper returned 0 transactions — skipping cache to allow retry');
+            cacheInfo.isracard = { fromCache: false, cachedAt: Date.now() };
+            return txns;
+          })
+          .catch((err) => {
+            console.error('[Isracard] Error:', err.message);
+            scraperErrors.push({ card: 'isracard', message: err.message });
+            return [];
+          });
+        promises.push(isracardPromise);
         labels.push('isracard');
       } else {
-        promises.push(Promise.resolve(cachedIsracard.data));
+        isracardPromise = Promise.resolve(cachedIsracard.data);
+        promises.push(isracardPromise);
         cacheInfo.isracard = { fromCache: true, cachedAt: cachedIsracard.timestamp };
         labels.push('isracard (cached)');
       }
 
-      // Stagger HOT by 12s when both Isracard scrapers need fresh data — same login domain
-      const hotStartDelay = (!cachedIsracard && !cachedIsracardHot) ? 12000 : 0;
-
       if (!cachedIsracardHot) {
-        const hotPromise = (hotStartDelay > 0
-          ? new Promise(r => setTimeout(r, hotStartDelay))
-          : Promise.resolve()
-        ).then(() =>
+        // Wait for regular Isracard to finish before starting HOT — same login domain
+        const hotStart = !cachedIsracard ? isracardPromise : Promise.resolve();
+        const hotPromise = hotStart.then(() =>
           scrapeIsracardHot(startDate)
             .then((result) => {
               const txns = mapTransactions(result, 'isracard-hot', month);
@@ -438,7 +476,7 @@ app.get('/api/transactions', async (req, res) => {
             .catch((err) => {
               console.error('[Isracard HOT] Error:', err.message);
               scraperErrors.push({ card: 'isracard-hot', message: err.message });
-              return []; // Don't fail everything if one card fails
+              return [];
             })
         );
         promises.push(hotPromise);
@@ -703,20 +741,19 @@ app.get('/api/transactions/stream', async (req, res) => {
 
     if (card === 'all') {
       // Isracard and Isracard HOT both login to digital.isracard.co.il.
-      // Running them simultaneously from the same IP can cause the HOT session to receive
-      // an empty response (success=true, accounts=[]).  Stagger HOT by 12s when both need
-      // a fresh scrape so the regular Isracard login completes before HOT starts.
+      // Overlapping sessions cause HOT to receive an empty response (success=true, accounts=[]).
+      // HOT waits for the regular Isracard scrape to complete before starting when both need fresh data.
       const needsIsracardFresh = !getCached('isracard', month);
       const needsHotFresh = !getCached('isracard-hot', month);
-      const hotDelay = (needsIsracardFresh && needsHotFresh) ? 12000 : 0;
 
-      const hotTask = hotDelay > 0
-        ? new Promise(r => setTimeout(r, hotDelay)).then(() => buildCardTask('isracard-hot', scrapeIsracardHot))
+      const isracardTask = buildCardTask('isracard', scrapeIsracard);
+      const hotTask = (needsIsracardFresh && needsHotFresh)
+        ? isracardTask.then(() => buildCardTask('isracard-hot', scrapeIsracardHot))
         : buildCardTask('isracard-hot', scrapeIsracardHot);
 
       const tasks = [
         buildCardTask('cal', scrapeCal),
-        buildCardTask('isracard', scrapeIsracard),
+        isracardTask,
         hotTask,
       ];
       const results = await Promise.all(tasks);

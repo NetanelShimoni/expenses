@@ -7,6 +7,7 @@ interface CardStatusBadgesProps {
 }
 
 const CARDS = [
+  { id: 'cal', label: 'כאל' },
   { id: 'isracard', label: 'ישראכרט' },
   { id: 'isracard-hot', label: 'ישראכרט הוט' },
 ];

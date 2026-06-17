@@ -94,6 +94,10 @@ function getTransactionType(txn) {
   return getInstallmentsInfo(txn) ? _transactions2.TransactionTypes.Installments : _transactions2.TransactionTypes.Normal;
 }
 function convertTransactions(txns, processedDate) {
+  // DEBUG: log all raw txns before filtering
+  txns.forEach(txn => {
+    console.log(`[DEBUG][isracard-raw] dealSumType=${txn.dealSumType} dealSum=${txn.dealSum} paymentSum=${txn.paymentSum} dealSumOutbound=${txn.dealSumOutbound} paymentSumOutbound=${txn.paymentSumOutbound} supplier="${txn.fullSupplierNameHeb || txn.fullSupplierNameOutbound}" voucherRatz=${txn.voucherNumberRatz} voucherRatzOut=${txn.voucherNumberRatzOutbound}`);
+  });
   const filteredTxns = txns.filter(txn => txn.dealSumType !== '1' && txn.voucherNumberRatz !== '000000000' && txn.voucherNumberRatzOutbound !== '000000000');
   return filteredTxns.map(txn => {
     const isOutbound = txn.dealSumOutbound;

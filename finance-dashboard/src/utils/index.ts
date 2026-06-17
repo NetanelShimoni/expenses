@@ -1,33 +1,53 @@
 import type { Transaction, TransactionGroup, CategoryBreakdown, MonthOption } from '@/types';
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'מזון': '#f97316',
-  'תחבורה': '#3b82f6',
-  'קניות': '#a855f7',
+  'מזון':    '#f97316',
+  'תחבורה':  '#3b82f6',
+  'קניות':   '#a855f7',
   'בילויים': '#ec4899',
   'חשבונות': '#64748b',
-  'בריאות': '#22c55e',
-  'חינוך': '#06b6d4',
-  'אחר': '#94a3b8',
+  'בריאות':  '#22c55e',
+  'חינוך':   '#06b6d4',
+  'שונות':   '#8b5cf6',
+  'אחר':     '#94a3b8',
+  'לא סווג': '#94a3b8',
+};
+
+const CATEGORY_BG: Record<string, string> = {
+  'מזון':    'linear-gradient(135deg,#fff7ed,#ffedd5)',
+  'תחבורה':  'linear-gradient(135deg,#eff6ff,#dbeafe)',
+  'קניות':   'linear-gradient(135deg,#faf5ff,#f3e8ff)',
+  'בילויים': 'linear-gradient(135deg,#fdf2f8,#fce7f3)',
+  'חשבונות': 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+  'בריאות':  'linear-gradient(135deg,#f0fdf4,#dcfce7)',
+  'חינוך':   'linear-gradient(135deg,#ecfeff,#cffafe)',
+  'שונות':   'linear-gradient(135deg,#f5f3ff,#ede9fe)',
+  'אחר':     'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+  'לא סווג': 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
 };
 
 export function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] || CATEGORY_COLORS['אחר'];
 }
 
+export function getCategoryBg(category: string): string {
+  return CATEGORY_BG[category] || CATEGORY_BG['אחר'];
+}
+
 export function getCategoryIcon(category: string): string {
   const icons: Record<string, string> = {
-    'מזון': '🛒',
-    'תחבורה': '🚗',
-    'קניות': '🛍️',
+    'מזון':    '🛒',
+    'תחבורה':  '🚗',
+    'קניות':   '🛍️',
     'בילויים': '🎬',
     'חשבונות': '📄',
-    'בריאות': '💊',
-    'חינוך': '📚',
-    'אחר': '📌',
-    'לא סווג': '📌',
+    'בריאות':  '💊',
+    'חינוך':   '📚',
+    'שונות':   '🔀',
+    'אחר':     '💳',
+    'לא סווג': '💳',
   };
-  return icons[category] || '📌';
+  return icons[category] || '💳';
 }
 
 export function formatCurrency(amount: number, currency = '₪'): string {
@@ -76,6 +96,7 @@ export function getCategoryBreakdown(transactions: Transaction[]): CategoryBreak
   let grandTotal = 0;
 
   for (const txn of transactions) {
+    if (txn.isCredit) continue; // credits are refunds, exclude from expense breakdown
     const cat = txn.category || 'אחר';
     if (!map[cat]) map[cat] = { total: 0, count: 0 };
     map[cat].total += txn.amount;
@@ -121,5 +142,5 @@ export function getTopCategory(transactions: Transaction[]): { category: string;
 }
 
 export function getTotalExpenses(transactions: Transaction[]): number {
-  return transactions.reduce((sum, t) => sum + t.amount, 0);
+  return transactions.reduce((sum, t) => sum + (t.isCredit ? -t.amount : t.amount), 0);
 }

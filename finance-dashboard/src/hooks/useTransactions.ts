@@ -62,10 +62,42 @@ export function useTransactions(month: string, card = 'all') {
     retry: 2,
   });
 
-  const forceRefresh = useCallback((onlyCard?: string) => {
-    forceRefreshRef.current = true;
-    refreshCardRef.current = onlyCard;
+  const forceRefresh = useCallback(async (onlyCard?: string) => {
     setIsRefreshing(true);
+
+    if (onlyCard) {
+      // Retry a single failed card — fetch only that card, then merge into existing data
+      setProgress({ overall: 0, cards: {} });
+      try {
+        const response = await fetchTransactionsStreaming(
+          month,
+          onlyCard,
+          true,
+          undefined,
+          (p) => setProgress(p),
+        );
+        // Merge: keep existing transactions from other cards, replace this card's transactions
+        queryClient.setQueryData<Transaction[]>(['transactions', month, card], (prev) => {
+          const others = (prev ?? []).filter((t) => t.card !== onlyCard);
+          return [...others, ...response.transactions].sort((a, b) => b.date.localeCompare(a.date));
+        });
+        setCacheInfo(response.cache);
+        setScraperErrors((prev) => {
+          const rest = prev.filter((e) => e.card !== onlyCard);
+          return response.scraperErrors?.length ? [...rest, ...response.scraperErrors] : rest;
+        });
+      } catch {
+        // keep existing errors
+      } finally {
+        setIsRefreshing(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    // Full refresh — re-scrape all cards
+    forceRefreshRef.current = true;
+    refreshCardRef.current = undefined;
     queryClient.invalidateQueries({ queryKey: ['transactions', month, card] });
   }, [queryClient, month, card]);
 

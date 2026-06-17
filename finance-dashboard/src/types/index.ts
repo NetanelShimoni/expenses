@@ -3,6 +3,7 @@ export interface Transaction {
   date: string;
   time?: string;       // "HH:MM"
   amount: number;
+  isCredit?: boolean;
   business: string;
   category: string;
   card: 'cal' | 'isracard' | 'isracard-hot' | string;
